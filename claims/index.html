@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VigiClaim - AI Claims Verification Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- PapaParse CSV Parser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        :root {
+            --bg-base: #090b0f;
+            --bg-surface: #11141d;
+            --bg-card: rgba(20, 24, 37, 0.65);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(99, 102, 241, 0.4);
+            
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            
+            /* Status Colors */
+            --color-supported: #10b981;
+            --color-supported-bg: rgba(16, 185, 129, 0.12);
+            --color-supported-border: rgba(16, 185, 129, 0.3);
+            
+            --color-contradicted: #f43f5e;
+            --color-contradicted-bg: rgba(244, 63, 94, 0.12);
+            --color-contradicted-border: rgba(244, 63, 94, 0.3);
+            
+            --color-info: #f59e0b;
+            --color-info-bg: rgba(245, 158, 11, 0.12);
+            --color-info-border: rgba(245, 158, 11, 0.3);
+            
+            /* Brand Colors */
+            --color-primary: #6366f1;
+            --color-primary-bg: rgba(99, 102, 241, 0.15);
+            --color-accent: #a855f7;
+            
+            /* Risk Colors */
+            --color-risk: #ec4899;
+            --color-risk-bg: rgba(236, 72, 153, 0.12);
+            --color-risk-border: rgba(236, 72, 153, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            overflow-y: auto;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 260px;
+            background-color: var(--bg-surface);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            flex-shrink: 0;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .logo-icon {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .logo-text {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #ffffff, #eb229a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-grow: 1;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .nav-item:hover {
+            color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .nav-item.active {
+            color: var(--text-primary);
+            background-color: var(--color-primary-bg);
+            border-color: rgba(99, 102, 241, 0.25);
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 16px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        /* Main Workspace */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Top Header */
+        .header {
+            height: 72px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            background-color: rgba(17, 20, 29, 0.4);
+            backdrop-filter: blur(8px);
+            z-index: 10;
+        }
+
+        .header-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--color-supported);
+            background-color: var(--color-supported-bg);
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--color-supported-border);
+            font-weight: 500;
+        }
+
+        .header-status.stale {
+            color: var(--color-info);
+            background-color: var(--color-info-bg);
+            border-color: var(--color-info-border);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: currentColor;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* Dashboard Container Scrollable */
+        .dashboard-body {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        /* Tab Content Control */
+        .tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 32px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+            transition: border-color 0.2s ease;
+        }
+
+        .stat-card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-icon-wrapper {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        /* Specific Status Stat Colors */
+        .stat-card.supported .stat-icon-wrapper { color: var(--color-supported); background-color: var(--color-supported-bg); border-color: var(--color-supported-border); }
+        .stat-card.contradicted .stat-icon-wrapper { color: var(--color-contradicted); background-color: var(--color-contradicted-bg); border-color: var(--color-contradicted-border); }
+        .stat-card.info .stat-icon-wrapper { color: var(--color-info); background-color: var(--color-info-bg); border-color: var(--color-info-border); }
+        .stat-card.risk .stat-icon-wrapper { color: var(--color-risk); background-color: var(--color-risk-bg); border-color: var(--color-risk-border); }
+
+        /* Dashboard Overview Grid Layout */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .panel-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Custom Charts */
+        .chart-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 16px 0;
+        }
+
+        .donut-chart {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .donut-center {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            background-color: var(--bg-surface);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.4);
+            z-index: 2;
+        }
+
+        .chart-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 4px;
+        }
+
+        /* Filter Controls */
+        .filter-bar {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 18px 24px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            backdrop-filter: blur(12px);
+        }
+
+        .search-wrapper {
+            position: relative;
+            flex-grow: 1;
+            min-width: 200px;
+        }
+
+        .search-input {
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 10px 16px 10px 42px;
+            color: var(--text-primary);
+            outline: none;
+            font-size: 0.9rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--color-primary);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .select-filter {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 10px 16px;
+            color: var(--text-secondary);
+            outline: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .select-filter {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+
+        background-color: var(--bg-surface);
+        color: var(--text-primary);
+        }
+
+        .select-filter option {
+        background-color: #11141d;
+        color: #f3f4f6;
+        }
+
+        .select-filter:focus {
+            border-color: var(--color-primary);
+            color: var(--text-primary);
+        }
+
+        /* Explorer List & Card View */
+        .explorer-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .claims-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .claim-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .claim-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-hover);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-row-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .object-tag {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            text-transform: capitalize;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+            text-transform: uppercase;
+        }
+
+        .badge.supported {
+            background-color: var(--color-supported-bg);
+            color: var(--color-supported);
+            border: 1px solid var(--color-supported-border);
+        }
+
+        .badge.contradicted {
+            background-color: var(--color-contradicted-bg);
+            color: var(--color-contradicted);
+            border: 1px solid var(--color-contradicted-border);
+        }
+
+        .badge.not_enough_information {
+            background-color: var(--color-info-bg);
+            color: var(--color-info);
+            border: 1px solid var(--color-info-border);
+        }
+
+        .badge.severity-low { background-color: rgba(255,255,255,0.05); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .badge.severity-medium { background-color: rgba(245, 158, 11, 0.1); color: var(--color-info); border: 1px solid var(--color-info-border); }
+        .badge.severity-high { background-color: rgba(244, 63, 94, 0.1); color: var(--color-contradicted); border: 1px solid var(--color-contradicted-border); }
+
+        .card-claim-text {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.4;
+        }
+
+        .card-metadata {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+            margin-top: auto;
+        }
+
+        .risk-pill {
+            background-color: var(--color-risk-bg);
+            color: var(--color-risk);
+            border: 1px solid var(--color-risk-border);
+            border-radius: 6px;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            font-weight: 600;
+        }
+
+        /* Details Side-Panel/Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(5, 5, 8, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .modal-container {
+            width: 100%;
+            max-width: 1100px;
+            height: 85vh;
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            animation: modalSlide 0.3s ease;
+        }
+
+        @keyframes modalSlide {
+            from { opacity: 0; transform: scale(0.96) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .modal-header {
+            padding: 20px 32px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 32px;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 32px;
+        }
+
+        .modal-left-column {
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .modal-right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        /* Detail Cards inside Modal */
+        .detail-panel {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 20px;
+        }
+
+        .detail-panel-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-primary);
+        }
+
+        /* Chat bubbles UI */
+        .chat-bubble-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .chat-bubble {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .chat-bubble.customer {
+            background-color: rgba(207, 27, 27, 0.03);
+            border: 1px solid var(--border-color);
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+
+        .chat-bubble.agent {
+            background-color: var(--color-primary-bg);
+            border: 1px solid #236e7f33;
+            color: var(--text-primary);
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .chat-bubble-sender {
+            font-weight: 700;
+            font-size: 0.75rem;
+            margin-bottom: 4px;
+            color: var(--text-muted);
+        }
+
+        /* Image Gallery inside Modal */
+        .image-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+        }
+
+        .gallery-image-wrapper {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            aspect-ratio: 1;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            background-color: #050508;
+        }
+
+        .gallery-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .gallery-image-wrapper:hover .gallery-image {
+            transform: scale(1.08);
+        }
+
+        .gallery-image-tag {
+            position: absolute;
+            bottom: 6px;
+            left: 6px;
+            background-color: rgba(0, 0, 0, 0.75);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* Detailed Decision list */
+        .decision-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .decision-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .decision-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .decision-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .decision-large {
+            grid-column: 1 / span 2;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+            margin-top: 4px;
+        }
+
+        /* User history summary box */
+        .history-stat-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .history-stat-box {
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .history-stat-num {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .history-stat-lbl {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Lightbox styling */
+        .lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0,0,0,0.95);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox-image {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        /* Risk specific badges inside detail list */
+        .risk-flag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .risk-tag {
+            background-color: var(--color-risk-bg);
+            color: var(--color-risk);
+            border: 1px solid var(--color-risk-border);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo-container">
+            <div class="logo-icon">
+                <i data-lucide="shield-check" style="color: #fff; width: 22px; height: 22px;"></i>
+            </div>
+            <span class="logo-text">DentDrive</span>
+        </div>
+
+        <div class="nav-menu">
+            <div class="nav-item active" onclick="switchTab('overview')">
+                <i data-lucide="layout-dashboard" style="width: 18px; height: 18px;"></i>
+                Dashboard
+            </div>
+            <div class="nav-item" onclick="switchTab('explorer')">
+                <i data-lucide="database" style="width: 18px; height: 18px;"></i>
+                Claims Explorer
+            </div>
+            <div class="nav-item" onclick="switchTab('risks')">
+                <i data-lucide="alert-triangle" style="width: 18px; height: 18px;"></i>
+                Risk Oversight
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <span>Powered by Gemini 2.5 Flash</span>
+            <span>Version 1.0.0</span>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+        <!-- Top Header -->
+        <div class="header">
+            <div class="header-title" id="page-title">Dashboard Overview</div>
+            <div class="header-status" id="header-status">
+                <div class="status-dot"></div>
+                <span id="status-label">Loading…</span>
+            </div>
+        </div>
+
+        <!-- Scrollable Dashboard Body -->
+        <div class="dashboard-body">
+            
+            <!-- OVERVIEW TAB -->
+            <div id="tab-overview" class="tab-content active">
+                <!-- Stats Row -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            Total Claims
+                            <div class="stat-icon-wrapper"><i data-lucide="file-text" style="width: 18px; height: 18px;"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-total">-</div>
+                    </div>
+                    <div class="stat-card supported">
+                        <div class="stat-header">
+                            Supported Claims
+                            <div class="stat-icon-wrapper"><i data-lucide="check-circle" style="width: 18px; height: 18px;"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-supported">-</div>
+                    </div>
+                    <div class="stat-card contradicted">
+                        <div class="stat-header">
+                            Contradicted
+                            <div class="stat-icon-wrapper"><i data-lucide="x-circle" style="width: 18px; height: 18px;"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-contradicted">-</div>
+                    </div>
+                    <div class="stat-card info">
+                        <div class="stat-header">
+                            Lacks Enough Info
+                            <div class="stat-icon-wrapper"><i data-lucide="help-circle" style="width: 18px; height: 18px;"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-lacks">-</div>
+                    </div>
+                    <div class="stat-card risk">
+                        <div class="stat-header">
+                            Flagged Risks
+                            <div class="stat-icon-wrapper"><i data-lucide="alert-triangle" style="width: 18px; height: 18px;"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-flagged">-</div>
+                    </div>
+                </div>
+
+                <!-- Graphs Section -->
+                <div class="overview-grid">
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <span class="panel-title"><i data-lucide="pie-chart" style="width: 18px; height: 18px; color: var(--color-primary);"></i> Decision Breakdown</span>
+                        </div>
+                        <div class="chart-container">
+                            <div class="donut-chart" id="status-donut" style="background: conic-gradient(var(--color-supported) 0% 0%, var(--color-contradicted) 0% 0%, var(--color-info) 0% 100%);">
+                                <div class="donut-center">
+                                    <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Accept Rate</span>
+                                    <span style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);" id="stat-accept-rate">-%</span>
+                                </div>
+                            </div>
+                            <div class="chart-legend">
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background-color: var(--color-supported);"></div>
+                                    Supported (<span id="legend-supported-val">0</span>)
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background-color: var(--color-contradicted);"></div>
+                                    Contradicted (<span id="legend-contradicted-val">0</span>)
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background-color: var(--color-info);"></div>
+                                    Lacks Info (<span id="legend-info-val">0</span>)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <span class="panel-title"><i data-lucide="bar-chart" style="width: 18px; height: 18px; color: var(--color-accent);"></i> Object Distribution</span>
+                        </div>
+                        <div class="chart-container" style="flex-direction: column; gap: 16px; align-items: stretch; padding: 10px 24px;">
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-secondary);">
+                                    <span>Car</span>
+                                    <span id="stat-object-car">0</span>
+                                </div>
+                                <div style="height: 8px; border-radius: 4px; background-color: rgba(255,255,255,0.03); overflow: hidden;">
+                                    <div id="bar-object-car" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--color-primary), var(--color-accent)); transition: width 0.8s ease;"></div>
+                                </div>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-secondary);">
+                                    <span>Laptop</span>
+                                    <span id="stat-object-laptop">0</span>
+                                </div>
+                                <div style="height: 8px; border-radius: 4px; background-color: rgba(255,255,255,0.03); overflow: hidden;">
+                                    <div id="bar-object-laptop" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--color-primary), var(--color-accent)); transition: width 0.8s ease;"></div>
+                                </div>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-secondary);">
+                                    <span>Package</span>
+                                    <span id="stat-object-package">0</span>
+                                </div>
+                                <div style="height: 8px; border-radius: 4px; background-color: rgba(255,255,255,0.03); overflow: hidden;">
+                                    <div id="bar-object-package" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--color-primary), var(--color-accent)); transition: width 0.8s ease;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXPLORER TAB -->
+            <div id="tab-explorer" class="tab-content">
+                <div class="filter-bar">
+                    <div class="search-wrapper">
+                        <i data-lucide="search" class="search-icon" style="width: 18px; height: 18px;"></i>
+                        <input type="text" id="search-bar" class="search-input" placeholder="Search by User ID or claim details..." oninput="applyFilters()">
+                    </div>
+                    <select id="filter-object" class="select-filter" onchange="applyFilters()">
+                        <option value="all">All Objects</option>
+                        <option value="car">Car</option>
+                        <option value="laptop">Laptop</option>
+                        <option value="package">Package</option>
+                    </select>
+                    <select id="filter-status" class="select-filter" onchange="applyFilters()">
+                        <option value="all">All Decisions</option>
+                        <option value="supported">Supported</option>
+                        <option value="contradicted">Contradicted</option>
+                        <option value="not_enough_information">Lacks Info</option>
+                    </select>
+                    <select id="filter-severity" class="select-filter" onchange="applyFilters()">
+                        <option value="all">All Severities</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="none">None</option>
+                        <option value="unknown">Unknown</option>
+                    </select>
+                    <select id="filter-risk" class="select-filter" onchange="applyFilters()">
+                        <option value="all">All Risks</option>
+                        <option value="flagged">Flagged Risks Only</option>
+                        <option value="clean">Clean Only</option>
+                    </select>
+                </div>
+
+                <div class="explorer-container">
+                    <div class="claims-grid" id="claims-grid-list">
+                        <!-- Cards injected dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- RISKS TAB -->
+            <div id="tab-risks" class="tab-content">
+                <div class="explorer-container">
+                    <div class="claims-grid" id="claims-grid-risks">
+                        <!-- Risk cards injected dynamically -->
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div class="modal-overlay" id="claim-modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="badge" id="modal-status-badge">Supported</span>
+                    <span style="font-weight: 500; font-size: 0.95rem; color: var(--text-secondary);" id="modal-case-title">Case #000 - User ID</span>
+                </div>
+                <button class="modal-close" onclick="closeModal()"><i data-lucide="x" style="width: 24px; height: 24px;"></i></button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Left Column -->
+                <div class="modal-left-column">
+                    <!-- Chat Dialogue -->
+                    <div class="detail-panel">
+                        <div class="detail-panel-title">
+                            <i data-lucide="message-square" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+                            Conversation Transcript
+                        </div>
+                        <div class="chat-bubble-container" id="modal-chat-container">
+                            <!-- Injected dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Images Submitted -->
+                    <div class="detail-panel">
+                        <div class="detail-panel-title">
+                            <i data-lucide="image" style="width: 18px; height: 18px; color: var(--color-accent);"></i>
+                            Image Evidence
+                        </div>
+                        <div class="image-gallery" id="modal-image-gallery">
+                            <!-- Injected dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div class="modal-right-column">
+                    <!-- Decision Box -->
+                    <div class="detail-panel" style="border-color: rgba(255,255,255,0.12);">
+                        <div class="detail-panel-title">
+                            <i data-lucide="activity" style="width: 18px; height: 18px; color: var(--color-supported);"></i>
+                            AI Decision & Justification
+                        </div>
+                        <div class="decision-grid">
+                            <div class="decision-item">
+                                <span class="decision-label">Object Type</span>
+                                <span class="decision-value" id="modal-object" style="text-transform: capitalize;">car</span>
+                            </div>
+                            <div class="decision-item">
+                                <span class="decision-label">Part Affected</span>
+                                <span class="decision-value" id="modal-part">bumper</span>
+                            </div>
+                            <div class="decision-item">
+                                <span class="decision-label">Issue Identified</span>
+                                <span class="decision-value" id="modal-issue">dent</span>
+                            </div>
+                            <div class="decision-item">
+                                <span class="decision-label">Severity</span>
+                                <span class="decision-value" id="modal-severity">medium</span>
+                            </div>
+                            <div class="decision-item">
+                                <span class="decision-label">Standard Met</span>
+                                <span class="decision-value" id="modal-standard-met">true</span>
+                            </div>
+                            <div class="decision-item">
+                                <span class="decision-label">Valid Image</span>
+                                <span class="decision-value" id="modal-valid-image">true</span>
+                            </div>
+                            <div class="decision-large">
+                                <span class="decision-label">Standard Verification Reason</span>
+                                <span style="font-size: 0.85rem; line-height: 1.4; color: var(--text-secondary);" id="modal-standard-reason">-</span>
+                            </div>
+                            <div class="decision-large">
+                                <span class="decision-label">Justification Grounded in Images</span>
+                                <span style="font-size: 0.85rem; line-height: 1.4; color: var(--text-secondary);" id="modal-justification">-</span>
+                            </div>
+                            <div class="decision-large">
+                                <span class="decision-label">Supporting Image IDs</span>
+                                <span class="decision-value" id="modal-supporting-ids">img_1</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User History & Risk -->
+                    <div class="detail-panel">
+                        <div class="detail-panel-title">
+                            <i data-lucide="shield-alert" style="width: 18px; height: 18px; color: var(--color-risk);"></i>
+                            User Risk Context
+                        </div>
+                        <div class="history-stat-row">
+                            <div class="history-stat-box">
+                                <div class="history-stat-num" id="modal-hist-total">0</div>
+                                <div class="history-stat-lbl">Total</div>
+                            </div>
+                            <div class="history-stat-box" style="color: var(--color-supported);">
+                                <div class="history-stat-num" id="modal-hist-accepted">0</div>
+                                <div class="history-stat-lbl">Accepted</div>
+                            </div>
+                            <div class="history-stat-box" style="color: var(--color-info);">
+                                <div class="history-stat-num" id="modal-hist-review">0</div>
+                                <div class="history-stat-lbl">Reviews</div>
+                            </div>
+                            <div class="history-stat-box" style="color: var(--color-contradicted);">
+                                <div class="history-stat-num" id="modal-hist-rejected">0</div>
+                                <div class="history-stat-lbl">Rejected</div>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.85rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 12px;" id="modal-hist-summary">
+                            -
+                        </div>
+                        <div class="decision-item" style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                            <span class="decision-label" style="margin-bottom: 8px;">Triggered Risk Flags</span>
+                            <div class="risk-flag-container" id="modal-risk-flags">
+                                <!-- Injected dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox for Image Zoom -->
+    <div class="lightbox" id="image-lightbox" onclick="closeLightbox()">
+        <button class="lightbox-close" onclick="closeLightbox()"><i data-lucide="x" style="width: 32px; height: 32px;"></i></button>
+        <img class="lightbox-image" id="lightbox-img" src="" alt="Zoomed Evidence">
+    </div>
+
+    <script>
+        let claimsData = [];
+        let userHistoryMap = {};
+
+        // Switch Sidebar Tabs
+        function switchTab(tabName) {
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Set active class on menu items
+            let activeItem = Array.from(document.querySelectorAll('.nav-item')).find(item => item.innerText.toLowerCase().includes(tabName.substring(0, 5)));
+            if (activeItem) activeItem.classList.add('active');
+            
+            // Set active class on content pane
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            // Update Page Title
+            let titleMap = {
+                'overview': 'Dashboard Overview',
+                'explorer': 'Claims Explorer',
+                'risks': 'Risk Oversight & Auditing'
+            };
+            document.getElementById('page-title').innerText = titleMap[tabName] || 'Dashboard';
+        }
+
+        // ── Data Loading & Live Sync ─────────────────────────────────────────
+        // How often (ms) to re-fetch output.csv while verify_claims.py is running.
+        const POLL_INTERVAL_MS = 10000;
+        let lastKnownRowCount = -1;
+        let pollTimer = null;
+
+        function setStatusLabel(text, stale = false) {
+            let el = document.getElementById('header-status');
+            let lbl = document.getElementById('status-label');
+            if (lbl) lbl.innerText = text;
+            if (stale) el.classList.add('stale');
+            else el.classList.remove('stale');
+        }
+
+        function loadAndRender() {
+            // Cache-bust with timestamp so the browser always re-fetches the latest CSV
+            return fetch('user_history.csv?t=' + Date.now())
+                .then(res => res.text())
+                .then(csvText => {
+                    let parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+                    parsed.data.forEach(row => { userHistoryMap[row.user_id] = row; });
+                    return fetch('output.csv?t=' + Date.now());
+                })
+                .then(res => res.text())
+                .then(csvText => {
+                    let parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+                    let newRowCount = parsed.data.length;
+
+                    // Only re-render when the data actually changed (avoids flicker)
+                    if (newRowCount !== lastKnownRowCount) {
+                        claimsData = parsed.data;
+                        lastKnownRowCount = newRowCount;
+                        renderStats();
+                        renderClaimsGrid();
+                        renderRiskGrid();
+                        lucide.createIcons();
+                    }
+
+                    let now = new Date().toLocaleTimeString();
+                    let msg = newRowCount > 0
+                        ? `Live · ${newRowCount} claim${newRowCount !== 1 ? 's' : ''} · ${now}`
+                        : `Waiting for results · ${now}`;
+                    setStatusLabel(msg, newRowCount === 0);
+                });
+        }
+
+        function startPolling() {
+            // Clear any existing timer before starting a fresh one
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = setInterval(() => {
+                loadAndRender().catch(err => {
+                    console.warn("Auto-refresh failed:", err);
+                    setStatusLabel('Refresh failed – retrying…', true);
+                });
+            }, POLL_INTERVAL_MS);
+        }
+
+        // Initialize and Load Data
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            setStatusLabel('Loading…', true);
+
+            loadAndRender()
+                .then(() => startPolling())
+                .catch(err => {
+                    console.error("Error loading CSV files:", err);
+                    setStatusLabel('Error – is run_server.py running?', true);
+                    alert("Could not load CSV files.\nMake sure run_server.py is running from the claims folder.");
+                });
+        });
+
+        // Compute and Render Stats Dashboard
+        function renderStats() {
+            let total = claimsData.length;
+            let supported = claimsData.filter(c => c.claim_status === 'supported').length;
+            let contradicted = claimsData.filter(c => c.claim_status === 'contradicted').length;
+            let lacks = claimsData.filter(c => c.claim_status === 'not_enough_information').length;
+            let flagged = claimsData.filter(c => c.risk_flags && c.risk_flags.toLowerCase() !== 'none').length;
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-supported').innerText = supported;
+            document.getElementById('stat-contradicted').innerText = contradicted;
+            document.getElementById('stat-lacks').innerText = lacks;
+            document.getElementById('stat-flagged').innerText = flagged;
+
+            // Compute Acceptance Rate
+            let rate = total > 0 ? Math.round((supported / total) * 100) : 0;
+            document.getElementById('stat-accept-rate').innerText = `${rate}%`;
+
+            // Draw status Donut Chart (conic gradient)
+            let supportedPct = (supported / total) * 100;
+            let contradictedPct = (contradicted / total) * 100;
+            let lacksPct = (lacks / total) * 100;
+            
+            let color1 = 'var(--color-supported)';
+            let color2 = 'var(--color-contradicted)';
+            let color3 = 'var(--color-info)';
+
+            let gradientStr = `conic-gradient(
+                ${color1} 0% ${supportedPct}%, 
+                ${color2} ${supportedPct}% ${supportedPct + contradictedPct}%, 
+                ${color3} ${supportedPct + contradictedPct}% 100%
+            )`;
+            document.getElementById('status-donut').style.background = gradientStr;
+
+            document.getElementById('legend-supported-val').innerText = supported;
+            document.getElementById('legend-contradicted-val').innerText = contradicted;
+            document.getElementById('legend-info-val').innerText = lacks;
+
+            // Render Object Type Bars
+            let cars = claimsData.filter(c => c.claim_object === 'car').length;
+            let laptops = claimsData.filter(c => c.claim_object === 'laptop').length;
+            let packages = claimsData.filter(c => c.claim_object === 'package').length;
+
+            document.getElementById('stat-object-car').innerText = cars;
+            document.getElementById('stat-object-laptop').innerText = laptops;
+            document.getElementById('stat-object-package').innerText = packages;
+
+            let maxObj = Math.max(cars, laptops, packages, 1);
+            document.getElementById('bar-object-car').style.width = `${(cars / maxObj) * 100}%`;
+            document.getElementById('bar-object-laptop').style.width = `${(laptops / maxObj) * 100}%`;
+            document.getElementById('bar-object-package').style.width = `${(packages / maxObj) * 100}%`;
+        }
+
+        // Render Claim Cards in Grid
+        function renderClaimsGrid(filteredData = claimsData) {
+            let container = document.getElementById('claims-grid-list');
+            container.innerHTML = '';
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 48px;">No claims found matching filters.</div>`;
+                return;
+            }
+
+            filteredData.forEach((claim, index) => {
+                let card = document.createElement('div');
+                card.className = 'claim-card';
+                card.onclick = () => openModal(claim, index);
+                
+                // Get Icon based on Object
+                let objIcon = 'package';
+                if (claim.claim_object === 'car') objIcon = 'car';
+                else if (claim.claim_object === 'laptop') objIcon = 'laptop';
+
+                // Get Risk pill
+                let riskPill = '';
+                if (claim.risk_flags && claim.risk_flags.toLowerCase() !== 'none') {
+                    riskPill = `<span class="risk-pill">Flagged Risk</span>`;
+                }
+
+                // Render Chat snippet
+                let chatExcerpt = claim.user_claim.split('|')[0] || '';
+                
+                card.innerHTML = `
+                    <div class="card-row-top">
+                        <div class="object-tag">
+                            <i data-lucide="${objIcon}" style="width: 16px; height: 16px;"></i>
+                            ${claim.claim_object}
+                        </div>
+                        <span class="badge ${claim.claim_status}">${claim.claim_status.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div style="font-weight: 700; font-size: 0.95rem;">Case #${String(index + 1).padStart(3, '0')} (${claim.user_id})</div>
+                    <p class="card-claim-text">${chatExcerpt}</p>
+                    <div class="card-metadata">
+                        <span class="badge severity-${claim.severity}">Severity: ${claim.severity}</span>
+                        ${riskPill}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        // Render Only Risk Flagged Claims in Risk Tab
+        function renderRiskGrid() {
+            let container = document.getElementById('claims-grid-risks');
+            let riskClaims = claimsData.filter(c => c.risk_flags && c.risk_flags.toLowerCase() !== 'none');
+            container.innerHTML = '';
+
+            if (riskClaims.length === 0) {
+                container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 48px;">No risk-flagged claims found. Everything is clean!</div>`;
+                return;
+            }
+
+            riskClaims.forEach((claim) => {
+                let card = document.createElement('div');
+                card.className = 'claim-card';
+                card.style.borderColor = 'rgba(236, 72, 153, 0.2)';
+                card.onclick = () => openModal(claim, claimsData.indexOf(claim));
+
+                let objIcon = 'package';
+                if (claim.claim_object === 'car') objIcon = 'car';
+                else if (claim.claim_object === 'laptop') objIcon = 'laptop';
+
+                let flags = claim.risk_flags.split(';');
+                let flagsHtml = flags.map(f => `<span class="risk-tag" style="font-size: 0.65rem; padding: 1px 5px;">${f.replace(/_/g, ' ')}</span>`).join('');
+
+                card.innerHTML = `
+                    <div class="card-row-top">
+                        <div class="object-tag" style="color: var(--color-risk);">
+                            <i data-lucide="alert-circle" style="width: 16px; height: 16px;"></i>
+                            ${claim.claim_object}
+                        </div>
+                        <span class="badge ${claim.claim_status}">${claim.claim_status.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div style="font-weight: 700; font-size: 0.95rem;">${claim.user_id}</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
+                        ${flagsHtml}
+                    </div>
+                    <div class="card-metadata">
+                        <span class="badge severity-${claim.severity}">Severity: ${claim.severity}</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">Audited by AI</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        // Apply Search and Dropdown Filters
+        function applyFilters() {
+            let query = document.getElementById('search-bar').value.toLowerCase();
+            let objectVal = document.getElementById('filter-object').value;
+            let statusVal = document.getElementById('filter-status').value;
+            let severityVal = document.getElementById('filter-severity').value;
+            let riskVal = document.getElementById('filter-risk').value;
+
+            let filtered = claimsData.filter(claim => {
+                let matchesSearch = claim.user_id.toLowerCase().includes(query) || 
+                                    claim.user_claim.toLowerCase().includes(query) || 
+                                    claim.claim_status_justification.toLowerCase().includes(query);
+                
+                let matchesObject = objectVal === 'all' || claim.claim_object === objectVal;
+                let matchesStatus = statusVal === 'all' || claim.claim_status === statusVal;
+                let matchesSeverity = severityVal === 'all' || claim.severity === severityVal;
+                
+                let hasRisks = claim.risk_flags && claim.risk_flags.toLowerCase() !== 'none';
+                let matchesRisk = riskVal === 'all' || 
+                                  (riskVal === 'flagged' && hasRisks) || 
+                                  (riskVal === 'clean' && !hasRisks);
+
+                return matchesSearch && matchesObject && matchesStatus && matchesSeverity && matchesRisk;
+            });
+
+            renderClaimsGrid(filtered);
+        }
+
+        // Open Detailed View Modal
+        function openModal(claim, index) {
+            let modal = document.getElementById('claim-modal');
+            modal.style.display = 'flex';
+
+            document.getElementById('modal-case-title').innerText = `Case #${String(index + 1).padStart(3, '0')} - User ID: ${claim.user_id}`;
+            
+            // Set Status badge
+            let statusBadge = document.getElementById('modal-status-badge');
+            statusBadge.className = `badge ${claim.claim_status}`;
+            statusBadge.innerText = claim.claim_status.replace(/_/g, ' ');
+
+            // Set decision grid details
+            document.getElementById('modal-object').innerText = claim.claim_object;
+            document.getElementById('modal-part').innerText = claim.object_part.replace(/_/g, ' ');
+            document.getElementById('modal-issue').innerText = claim.issue_type.replace(/_/g, ' ');
+            document.getElementById('modal-severity').innerText = claim.severity;
+            document.getElementById('modal-standard-met').innerText = claim.evidence_standard_met;
+            document.getElementById('modal-valid-image').innerText = claim.valid_image;
+            document.getElementById('modal-standard-reason').innerText = claim.evidence_standard_met_reason;
+            document.getElementById('modal-justification').innerText = claim.claim_status_justification;
+            document.getElementById('modal-supporting-ids').innerText = claim.supporting_image_ids.replace(/;/g, ', ');
+
+            // Set User history
+            let hist = userHistoryMap[claim.user_id] || {
+                past_claim_count: '0', accept_claim: '0', manual_review_claim: '0', rejected_claim: '0',
+                history_summary: 'No prior claims history found.', history_flags: 'none'
+            };
+            document.getElementById('modal-hist-total').innerText = hist.past_claim_count;
+            document.getElementById('modal-hist-accepted').innerText = hist.accept_claim;
+            document.getElementById('modal-hist-review').innerText = hist.manual_review_claim;
+            document.getElementById('modal-hist-rejected').innerText = hist.rejected_claim;
+            document.getElementById('modal-hist-summary').innerText = hist.history_summary;
+
+            // Set Risk flags list
+            let riskFlagsContainer = document.getElementById('modal-risk-flags');
+            riskFlagsContainer.innerHTML = '';
+            let combinedFlags = new Set();
+            
+            // Add claim specific flags
+            if (claim.risk_flags && claim.risk_flags.toLowerCase() !== 'none') {
+                claim.risk_flags.split(';').forEach(f => combinedFlags.add(f));
+            }
+            // Add user history specific flags
+            if (hist.history_flags && hist.history_flags.toLowerCase() !== 'none') {
+                hist.history_flags.split(';').forEach(f => combinedFlags.add(f));
+            }
+
+            if (combinedFlags.size === 0) {
+                riskFlagsContainer.innerHTML = `<span style="font-size: 0.85rem; color: var(--text-muted);">None detected</span>`;
+            } else {
+                combinedFlags.forEach(flag => {
+                    let pill = document.createElement('span');
+                    pill.className = 'risk-tag';
+                    pill.innerText = flag.replace(/_/g, ' ');
+                    riskFlagsContainer.appendChild(pill);
+                });
+            }
+
+            // Render Conversation UI
+            let chatContainer = document.getElementById('modal-chat-container');
+            chatContainer.innerHTML = '';
+            
+            // Dialogues are separated by "|" in output.csv
+            let dialogueLines = claim.user_claim.split('|');
+            dialogueLines.forEach(line => {
+                if (!line.trim()) return;
+                
+                let bubble = document.createElement('div');
+                let isAgent = line.toLowerCase().includes('agent:') || line.toLowerCase().includes('support:') || line.toLowerCase().includes('soporte:');
+                
+                bubble.className = `chat-bubble ${isAgent ? 'agent' : 'customer'}`;
+                
+                let text = line.trim();
+                let sender = isAgent ? 'Agent' : 'Customer';
+                
+                // Remove prefix like Customer: or Agent:
+                if (text.includes(':')) {
+                    let parts = text.split(':');
+                    sender = parts[0].trim();
+                    text = parts.slice(1).join(':').trim();
+                }
+                
+                bubble.innerHTML = `
+                    <div class="chat-bubble-sender">${sender}</div>
+                    <div>${text}</div>
+                `;
+                chatContainer.appendChild(bubble);
+            });
+            
+            // Scroll chat to top
+            chatContainer.scrollTop = 0;
+
+            // Render Images Gallery
+            let gallery = document.getElementById('modal-image-gallery');
+            gallery.innerHTML = '';
+            
+            let imgPaths = claim.image_paths.split(';');
+            imgPaths.forEach(path => {
+                let wrapper = document.createElement('div');
+                wrapper.className = 'gallery-image-wrapper';
+                
+                let filename = path.split('/').pop();
+                let imgId = filename.split('.')[0]; // e.g. "img_1"
+                
+                // Check if this image ID supported the decision
+                let isSupporting = claim.supporting_image_ids.split(';').includes(imgId);
+                
+                wrapper.onclick = () => openLightbox(path);
+                wrapper.innerHTML = `
+                    <img class="gallery-image" src="${path}" alt="Claim Evidence">
+                    <span class="gallery-image-tag" style="${isSupporting ? 'border-color: var(--color-supported); color: var(--color-supported); background-color: rgba(16, 185, 129, 0.25);' : ''}">
+                        ${imgId} ${isSupporting ? '✓' : ''}
+                    </span>
+                `;
+                gallery.appendChild(wrapper);
+            });
+        }
+
+        // Close Modal
+        function closeModal() {
+            document.getElementById('claim-modal').style.display = 'none';
+        }
+
+        // Lightbox Zoom functions
+        function openLightbox(src) {
+            let lb = document.getElementById('image-lightbox');
+            document.getElementById('lightbox-img').src = src;
+            lb.style.display = 'flex';
+        }
+
+        function closeLightbox() {
+            document.getElementById('image-lightbox').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
